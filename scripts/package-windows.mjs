@@ -19,7 +19,7 @@ export function verifyFontSource(bytes) {
   return bytes;
 }
 
-async function readFontSource() {
+export async function readFontSource() {
   const cache = path.join(project, 'output', 'vendor-source', fontSource.name);
   try { return verifyFontSource(await fs.readFile(cache)); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -102,7 +102,7 @@ const licenseInputs = [
   ['docx embedded browser libraries and provenance', 'tools/windows/licenses/sources.md'],
 ];
 
-async function thirdPartyNotices() {
+export async function thirdPartyNotices() {
   const sections = [];
   for (const [name, relative] of licenseInputs) {
     const contents = await fs.readFile(path.join(project, relative), 'utf8');

@@ -109,6 +109,8 @@ Word 与 Markdown 按原始页码分节，不还原课件排版，也不做 OCR�
 
 `src/pdf.ts` 负责加载和渲染，`src/analyze.ts` 负责比较与建议，`src/export.ts` 负责 PDF 导出，`src/document-export.ts` 负责 Word 与 Markdown 导出。`src/demo.ts` 保留原始综合演示，`src/study-demo.ts` 提供公式和图形课件；`src/study-ui.ts` 与 `src/study.css` 提供场景入口、复核提示和步骤控件，`src/sequence-player.ts` 负责可停止的单次回看。其余界面与语言支持位于 `src/main.ts`、`src/i18n.ts` 和 `src/styles.css`。
 
+维护者可按[部署说明](docs/deployment.md)准备浏览器演示站。网页打包会附上第三方声明和对应字体源码；仅推送源码不会自动上线网站。
+
 检查打包输入并生成 Windows 便携 ZIP：
 
 ```sh

@@ -107,6 +107,8 @@ The source PDF is never overwritten. **PDF exports** copy or embed original PDF 
 
 ## Development
 
+Maintainers can prepare a static browser demo with the [manual deployment workflow](docs/deployment.md). Packaging includes the required notices and corresponding font source; a source push alone does not deploy a website.
+
 | Module | Responsibility |
 | --- | --- |
 | `src/pdf.ts` | Bounded PDF loading, rendering, and text extraction with PDF.js |
