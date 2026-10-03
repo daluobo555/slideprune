@@ -39,7 +39,7 @@ The workflow follows [GitHub's custom Pages workflow documentation](https://docs
 Users can verify a downloaded archive with PowerShell:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath .\SlidePrune-0.3.1-windows.zip
+Get-FileHash -Algorithm SHA256 -LiteralPath .\SlidePrune-0.4.0-windows.zip
 ```
 
 Compare the complete checksum with `SHA256SUMS.txt`. Extract the complete ZIP and follow `START-HERE.txt`. The application needs .NET Framework 4.x and a current desktop browser, but does not require Node.js. If the browser does not open automatically, use the loopback URL printed by the launcher. Keep existing operating-system protections enabled.
