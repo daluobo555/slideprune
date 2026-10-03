@@ -4,11 +4,13 @@
 
 [English](README.md)
 
+[在线体验](https://daluobo555.github.io/slideprune/) · [下载 v0.4.0 Windows 预览版](https://github.com/daluobo555/slideprune/releases/tag/v0.4.0)
+
 有些课件会把每次出现的新要点、每一步公式或动画都导出成一页 PDF。SlidePrune 比较相邻页面，提出可精简的重复内容，并帮助你检查需要保留的过程，再逐页复核后导出。
 
 复核后的页面可导出为 PDF、Word（`.docx`）或 Markdown，输入仍只支持 PDF。
 
-**当前版本：0.4.0 本地预览。** 逐页笔记和进度保存/恢复为尚未发布的本地新增功能，当前目录没有公开演示站地址。
+**当前版本：0.4.0 预览版。** 支持逐页笔记、学习资料导出，以及本地复习进度保存与恢复。
 
 ![SlidePrune 0.3.0：逐条展开、公式推导、图形演变三个场景入口](docs/assets/study-workflows.png)
 
@@ -32,11 +34,15 @@
 
 场景分类来自文字与图像比较，不代表理解课程含义。漏掉数学线索或拿不准的分组仍需人工复核；程序不做 OCR，也不推理公式。
 
-## 本地运行
+## 开始使用
+
+### 浏览器直接体验
+
+打开[在线演示站](https://daluobo555.github.io/slideprune/)，选择内置示例或自己的 PDF，无需安装。加载网站和资源需要联网，PDF 仍在当前浏览器内处理。离开前请点击“**导出进度**”：应用不会自动保存。
 
 ### Windows 便携 ZIP
 
-项目作者可以在本地生成便携 ZIP 供试用，**当前尚未公开发布**。拿到本地生成的包后，解压并双击 `SlidePrune.exe` 即可。需要 **.NET Framework 4.x** 和较新的桌面浏览器，不需要安装 Node.js。启动器在本地提供应用页面，并会尝试打开默认浏览器；自动打开浏览器的行为尚未实测。
+从 [v0.4.0 发布页](https://github.com/daluobo555/slideprune/releases/tag/v0.4.0)下载 `SlidePrune-0.4.0-windows.zip` 和对应的 `SHA256SUMS.txt`。这是**未签名预览版**。完整解压后双击 `SlidePrune.exe`，需要 **.NET Framework 4.x** 和较新的桌面浏览器，不需要安装 Node.js。启动器在本地提供应用页面，并会尝试打开默认浏览器；自动打开浏览器的行为尚未实测。若没有自动打开，请手动访问启动器显示的本地地址。
 
 请完整保留压缩包内的文件：除程序外，还包含第三方许可证声明和原始 Liberation 1.07.4 字体源码包。启动说明见包内 `START-HERE.txt`。
 

@@ -4,13 +4,15 @@ Review progressive reveals, formula derivations and changing diagrams, then make
 
 [简体中文](README.zh-CN.md)
 
+[Try online](https://daluobo555.github.io/slideprune/) · [Download v0.4.0 Windows preview](https://github.com/daluobo555/slideprune/releases/tag/v0.4.0)
+
 Try the new [Word document](docs/assets/demo-study-notes.docx), [Markdown text](docs/assets/demo-study-notes.md), or [Markdown image ZIP](docs/assets/demo-markdown.zip), generated from the original demo. [View the export panel](docs/assets/document-export.png).
 
 A lecture PDF can contain a new page for every bullet, equation or animation step. SlidePrune compares adjacent pages, suggests which repetition to skip, and helps you inspect the steps worth keeping before exporting.
 
 Export your reviewed selection as PDF, Word (`.docx`), or Markdown. Input remains PDF only.
 
-**Status: local preview, v0.4.0.** Page notes and save/restore progress are local, unpublished additions. No public demo deployment is provided in this checkout.
+**Status: preview, v0.4.0.** Write page notes, export study documents, and save or restore review progress locally.
 
 ![SlidePrune 0.3.0: progressive reveals, formula derivations and changing diagrams](docs/assets/study-workflows.png)
 
@@ -32,11 +34,15 @@ For groups with multiple pages, **Play steps** visits every source page in that 
 
 These categories are text and image comparison cues, not an understanding of the lesson. A missed formula cue or an uncertain group still needs manual review. No OCR or mathematical reasoning is performed.
 
-## Try it locally
+## Get started
+
+### Try in your browser
+
+Open the [online demo](https://daluobo555.github.io/slideprune/) and choose a built-in example or your own PDF. No installation is needed. Loading the site and its assets requires internet access; PDF processing stays in your browser. Use **Save progress** before leaving: there is no autosave.
 
 ### Windows portable ZIP
 
-The project author can generate a portable ZIP for local trials; **it has not been publicly released**. If you have that locally built package, extract it and double-click `SlidePrune.exe`. It requires **.NET Framework 4.x** and a current desktop browser, but does not require Node.js. The launcher serves the app locally and is designed to open your default browser; automatic browser opening has not yet been verified.
+Download `SlidePrune-0.4.0-windows.zip` and its `SHA256SUMS.txt` from the [v0.4.0 release](https://github.com/daluobo555/slideprune/releases/tag/v0.4.0). This is an **unsigned preview**. Extract the complete ZIP and double-click `SlidePrune.exe`. It requires **.NET Framework 4.x** and a current desktop browser, but does not require Node.js. The launcher serves the app locally and is designed to open your default browser; automatic browser opening has not yet been verified. If needed, open the local URL printed by the launcher manually.
 
 Keep the package together: it includes third-party license notices and the original Liberation 1.07.4 font source archive alongside the executable. See the package's `START-HERE.txt` for launch instructions.
 
