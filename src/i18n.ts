@@ -17,13 +17,13 @@ const en = {
   privacy: 'Files are processed in this browser. No upload, account, or AI subscription.',
   feature1: 'Review every suggestion',
   feature2: 'Keep crisp text & diagrams',
-  feature3: 'Make space for your notes',
+  feature3: 'Write notes and save your progress',
   step1: 'Bring your slides',
   step1body: 'Start with a PDF. You don’t need the original presentation.',
   step2: 'Keep what matters',
   step2body: 'Review reveals, formula steps and diagram states, then choose what stays.',
   step3: 'Make it yours',
-  step3body: 'Export a PDF handout, an editable Word document, or Markdown notes.',
+  step3body: 'Add page notes, save your progress, and export to PDF, Word or Markdown.',
   sampleLabel: 'FROM SLIDE DECK TO STUDY NOTES',
   sampleTitle: 'A clearer view of the same ideas.',
   sampleSub: 'Original diagrams. Fewer repeated steps. Your decisions.',
@@ -104,7 +104,7 @@ const en = {
   errorTitle: 'Couldn’t complete this step',
   dismiss: 'Dismiss',
   footer: 'Made for focus. Built for privacy.',
-  footerNote: 'Local prototype · v0.3.1',
+  footerNote: 'Local preview · v0.4.0',
   success: 'Your PDF is ready. Check your browser downloads.',
   reportSuccess: 'Your page map is ready. Check your browser downloads.',
   saveAgain: 'Save file',
@@ -142,7 +142,8 @@ const zh: typeof en = {
   eyebrow: '让复习更专注',
   hero1: '看清变化，',
   hero2: '留下思路。',
-  intro: '逐条展开，复核后精简；公式推导，留住中间步骤；图形演变，逐帧看清变化。把学习过程，整理成自己的复习讲义。',
+  intro:
+    '逐条展开，复核后精简；公式推导，留住中间步骤；图形演变，逐帧看清变化。把学习过程，整理成自己的复习讲义。',
   choose: '选择 PDF 课件',
   drop: '也可以把课件拖到这里',
   limits: 'PDF 不超过 40 MiB · 250 页',
@@ -152,13 +153,13 @@ const zh: typeof en = {
   privacy: '文件在当前浏览器内处理，无需上传、账号或 AI 订阅。',
   feature1: '每个建议都可复核',
   feature2: '保留清晰文字与图表',
-  feature3: '为自己的笔记留白',
+  feature3: '逐页写笔记，保存复习进度',
   step1: '放入课件',
   step1body: '有 PDF 就能开始，不需要原始演示文件。',
   step2: '确认保留内容',
   step2body: '检查逐条展开、公式推导和图形变化，选择需要保留的过程。',
   step3: '整理成讲义',
-  step3body: '导出 PDF 讲义、可编辑的 Word 文档，或 Markdown 笔记。',
+  step3body: '写下逐页笔记，保存复习进度，再导出 PDF、Word 或 Markdown。',
   sampleLabel: '从冗长课件，到复习讲义',
   sampleTitle: '相同的知识，更清楚地呈现。',
   sampleSub: '保留原始图表，减少重复步骤，由你决定。',
@@ -235,7 +236,7 @@ const zh: typeof en = {
   errorTitle: '处理文件时遇到问题',
   dismiss: '关闭提示',
   footer: '为专注而做，让隐私留在本地。',
-  footerNote: '本地原型 · v0.3.1',
+  footerNote: '本地预览 · v0.4.0',
   success: 'PDF 已生成，请查看浏览器下载。',
   reportSuccess: '页码对照表已生成，请查看浏览器下载。',
   saveAgain: '保存文件',
@@ -290,6 +291,32 @@ export function errorMessage(message: string, lang: Language): string {
       '当前浏览器无法渲染 PDF，请使用较新版本的桌面浏览器。',
     'Page images are too large for one document. Export fewer pages or turn off page images.':
       '原页图片超过单份文档的大小限制。请减少导出页数，或关闭原页图片。',
+    'Review project fields are missing or unsupported.':
+      '进度文件缺少必要字段，或包含暂不支持的字段。',
+    'Review project PDF identity is invalid.': '进度文件中的 PDF 标识无效。',
+    'Review project page numbers must be valid and unique.': '进度文件中的页码必须有效且不能重复。',
+    'Review project notes are invalid.': '进度文件中的笔记格式无效。',
+    'Review project note pages must be valid and unique.':
+      '进度文件中的笔记页码必须有效且不能重复。',
+    'Each page note must contain at most 4000 characters.': '每页笔记最多可写 4,000 个字符。',
+    'Review project notes exceed 200000 characters in total.':
+      '进度文件中的笔记合计超过 200,000 个字符。',
+    'This file is not a SlidePrune review project.': '此文件不是 SlidePrune 进度文件。',
+    'This review project version is not supported.': '暂不支持此版本的进度文件。',
+    'Review project PDF name is invalid.': '进度文件中的 PDF 文件名无效。',
+    'Review project current page is invalid.': '进度文件中的当前页码无效。',
+    'Review project export settings are invalid.': '进度文件中的导出设置无效。',
+    'Review project file exceeds 2 MiB.': '进度文件超过 2 MiB，请选择较小的文件。',
+    'Review project file must contain valid JSON.': '进度文件必须包含有效的 JSON。',
+    'This review project belongs to a different PDF. Load the exact original PDF.':
+      '这份进度属于另一份 PDF，请先打开内容完全相同的原始 PDF。',
+    'Choose a PDF between 1 byte and 40 MiB to save review progress.':
+      '请选择大小在 1 字节到 40 MiB 之间的 PDF，再导出进度。',
+    'This browser cannot verify PDF fingerprints. Use HTTPS or localhost.':
+      '当前浏览器无法核对 PDF 指纹，请通过 HTTPS 或 localhost 打开应用。',
+    'Page notes must be plain text of at most 4000 characters.':
+      '每页笔记必须为纯文本，且不超过 4,000 个字符。',
+    'Total notes must not exceed 200000 characters.': '笔记合计不能超过 200,000 个字符。',
   };
   if (message.includes('optional content layers'))
     return '此 PDF 含有可选内容图层。为避免隐藏图层意外出现在导出文件中，本版暂不支持导出这类文件。';

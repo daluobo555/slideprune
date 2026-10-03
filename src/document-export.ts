@@ -1,6 +1,7 @@
 import { Document, HeadingLevel, ImageRun, Packer, Paragraph, TextRun } from 'docx';
 import { strToU8, zipSync, type Zippable } from 'fflate';
 import type { DocumentOptions, DocumentPage } from './document-types';
+import { MAX_NOTE_LENGTH, MAX_TOTAL_NOTE_LENGTH } from './review-project';
 
 const pngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
 
@@ -13,6 +14,7 @@ function checkedPages(pages: DocumentPage[], options: DocumentOptions): Document
   )
     throw new Error('Choose valid document options.');
   const numbers = new Set<number>();
+  let totalNoteLength = 0;
   for (const page of pages) {
     if (
       !Number.isSafeInteger(page.pageNumber) ||
@@ -23,6 +25,13 @@ function checkedPages(pages: DocumentPage[], options: DocumentOptions): Document
     numbers.add(page.pageNumber);
     if (!Array.isArray(page.textLines) || page.textLines.some((line) => typeof line !== 'string'))
       throw new Error('Page text must contain text lines.');
+    if (page.note !== undefined) {
+      if (typeof page.note !== 'string' || page.note.length > MAX_NOTE_LENGTH)
+        throw new Error(`Page notes must be plain text of at most ${MAX_NOTE_LENGTH} characters.`);
+      totalNoteLength += page.note.length;
+      if (totalNoteLength > MAX_TOTAL_NOTE_LENGTH)
+        throw new Error(`Total notes must not exceed ${MAX_TOTAL_NOTE_LENGTH} characters.`);
+    }
     if (options.includeImages) {
       const image = page.image;
       if (
@@ -46,12 +55,14 @@ function labels(options: DocumentOptions) {
         title: '学习资料',
         page: '原始页',
         empty: '此页没有可提取文字，未进行 OCR 识别。',
+        myNotes: '我的笔记',
         note: '正文为 PDF 提取文字，阅读顺序和公式可能需要校对；原页图片仅作参考。',
       }
     : {
         title: 'Study document',
         page: 'Original page',
         empty: 'No extractable text was found on this page. No OCR was performed.',
+        myNotes: 'My notes',
         note: 'Text was extracted from the PDF; reading order and formulas may need correction. Page images are references.',
       };
 }
@@ -110,6 +121,13 @@ export async function exportDocx(
     const extracted = lines(page);
     for (const line of extracted.some((line) => line.trim()) ? extracted : [text.empty])
       children.push(new Paragraph({ children: [new TextRun(xmlText(line))] }));
+    if (page.note?.trim()) {
+      children.push(
+        new Paragraph({ text: text.myNotes, heading: HeadingLevel.HEADING_2, keepNext: true }),
+      );
+      for (const line of page.note.split(/\r\n|\r|\n/u))
+        children.push(new Paragraph({ children: [new TextRun(xmlText(line))] }));
+    }
   }
   const document = new Document({
     title,
@@ -131,6 +149,10 @@ export async function exportDocx(
         heading1: {
           run: { color: '000000', size: 28, bold: true },
           paragraph: { spacing: { before: 120, after: 160 } },
+        },
+        heading2: {
+          run: { color: '000000', size: 24, bold: true },
+          paragraph: { spacing: { before: 160, after: 100 } },
         },
       },
     },
@@ -181,6 +203,14 @@ export function exportMarkdown(pages: DocumentPage[], options: DocumentOptions):
         ? extracted.map(markdownText).join('  \n')
         : markdownText(text.empty),
     );
+    if (page.note?.trim())
+      blocks.push(
+        `### ${text.myNotes}`,
+        page.note
+          .split(/\r\n|\r|\n/u)
+          .map(markdownText)
+          .join('  \n'),
+      );
   }
   return blocks.join('\n\n') + '\n';
 }

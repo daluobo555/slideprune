@@ -167,6 +167,9 @@ export async function createStudyDemoPdf(kind: StudyDemoKind): Promise<Uint8Arra
   doc.setTitle(`SlidePrune original ${kind} lesson`);
   doc.setAuthor('SlidePrune');
   doc.setSubject('Original synthetic lesson for review; no third-party course material.');
+  // Fixed synthetic dates keep the same demo byte-identical for saved review projects.
+  doc.setCreationDate(new Date('2026-01-01T00:00:00Z'));
+  doc.setModificationDate(new Date('2026-01-01T00:00:00Z'));
   const fonts: DemoFonts = {
     regular: await doc.embedFont(StandardFonts.Helvetica),
     bold: await doc.embedFont(StandardFonts.HelveticaBold),

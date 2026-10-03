@@ -1,5 +1,6 @@
 import './styles.css';
 import './study.css';
+import './review.css';
 import { messages, errorMessage, type Language } from './i18n';
 import { analyzePages } from './analyze';
 import { ExportCache } from './export-cache';
@@ -7,6 +8,16 @@ import type { Analysis, ExportLayout, PageSnapshot, SlideGroup } from './types';
 import type { OutputFormat } from './document-types';
 import { scenarioCards, studyGuidance, sequenceControls, studyMessages } from './study-ui';
 import { SequencePlayer } from './sequence-player';
+import { noteEditor, projectToolbar, reviewMessages } from './review-ui';
+import {
+  MAX_NOTE_LENGTH,
+  MAX_TOTAL_NOTE_LENGTH,
+  MAX_PROJECT_BYTES,
+  fingerprintPdf,
+  encodeReviewProject,
+  decodeReviewProject,
+  type ReviewProject,
+} from './review-project';
 
 const root = document.querySelector<HTMLDivElement>('#app')!;
 let lang: Language = navigator.language.startsWith('zh') ? 'zh' : 'en';
@@ -14,6 +25,15 @@ let pages: PageSnapshot[] = [];
 let analysis: Analysis | null = null;
 let source: Uint8Array | null = null;
 let filename = '';
+let sourceFingerprint = '';
+let pageNotes = new Map<number, string>();
+let projectDirty = false;
+let preserveEditor = false;
+let pendingReplacement: {
+  kind: 'restore' | 'file' | 'clear';
+  apply: () => void;
+  returnFocus?: string;
+} | null = null;
 let kept = new Set<number>();
 let groupIndex = 0;
 let pageNumber = 1;
@@ -24,7 +44,7 @@ let markdownImages = false;
 let documentController: AbortController | null = null;
 let documentRequest = 0;
 let documentProgress = { done: 0, total: 0, phase: 'checking' as 'checking' | 'pages' | 'writing' };
-let busy: 'load' | 'export' | 'preview' | null = null;
+let busy: 'load' | 'export' | 'preview' | 'project' | null = null;
 let progress = { done: 0, total: 0 };
 let error = '';
 let notice = '';
@@ -86,17 +106,68 @@ function setSelection(next: number[]) {
   history.push(previous);
   if (history.length > 40) history.shift();
   kept = new Set(next);
+  projectDirty = true;
 }
 function undoSelection() {
   sequencePlayer.stop();
   const previous = history.pop();
   if (!previous || busy) return;
   kept = new Set(previous);
+  projectDirty = true;
   notice = '';
   render();
 }
 function pageRange(nums: number[]) {
   return nums.length === 1 ? `${nums[0]}` : `${nums[0]}–${nums.at(-1)}`;
+}
+
+function updateNote(input: HTMLTextAreaElement) {
+  const n = Number(input.dataset.notePage);
+  if (busy || n !== pageNumber || !source) return;
+  const previous = pageNotes.get(n) ?? '';
+  const otherLength =
+    [...pageNotes.values()].reduce((sum, text) => sum + text.length, 0) - previous.length;
+  const limit = Math.min(MAX_NOTE_LENGTH, MAX_TOTAL_NOTE_LENGTH - otherLength);
+  const text = input.value;
+  const feedback = root.querySelector<HTMLElement>('#note-feedback');
+  if (feedback)
+    feedback.textContent =
+      input.value.length > limit
+        ? reviewMessages(lang)[limit < MAX_NOTE_LENGTH ? 'noteTotalLimit' : 'noteCharLimit']
+        : '';
+  if (text.length > limit) {
+    // Reject an overflowing insertion instead of cutting off existing text at the end.
+    const caret = input.selectionStart;
+    input.value = previous;
+    input.setSelectionRange(Math.min(caret, previous.length), Math.min(caret, previous.length));
+    return;
+  }
+  if (text === previous) return;
+  if (text) pageNotes.set(n, text);
+  else pageNotes.delete(n);
+  projectDirty = true;
+  const counter = root.querySelector('#note-counter');
+  if (counter)
+    counter.textContent = `${text.length.toLocaleString()} / 4,000 ${reviewMessages(lang).characters}`;
+  const status = root.querySelector<HTMLElement>('#project-status');
+  if (status) {
+    status.textContent = reviewMessages(lang).dirty;
+    status.dataset.dirty = 'true';
+  }
+  const count = root.querySelector('#project-note-count');
+  if (count) count.textContent = `${pageNotes.size} ${reviewMessages(lang).noteCount}`;
+}
+
+function pauseForNote() {
+  if (!sequencePlayer.playing) return;
+  preserveEditor = true;
+  sequencePlayer.stop();
+  preserveEditor = false;
+  const button = root.querySelector('[data-action="sequence-play"]');
+  if (button) {
+    button.setAttribute('aria-pressed', 'false');
+    button.innerHTML = `<span aria-hidden="true">▷</span>${studyMessages(lang).play}`;
+  }
 }
 
 function activateGroup(index: number) {
@@ -119,13 +190,19 @@ function render() {
     <footer><span>${icon('leaf')}${t.footer}</span><span>${t.footerNote}</span></footer>
     <input id="pdf-input" class="sr-only" type="file" accept="application/pdf,.pdf" aria-label="${t.choose}" />
     ${expanded && pages.length ? modalView() : ''}
-    ${previewOpen ? outputModalView() : ''}`;
+    ${previewOpen ? outputModalView() : ''}
+    <input id="project-input" class="sr-only" type="file" accept=".json,application/json" aria-label="${reviewMessages(lang).filePickLabel}" />
+    ${pendingReplacement ? replacementModal() : ''}`;
+  const noteInput = root.querySelector<HTMLTextAreaElement>('#page-note');
+  if (noteInput) noteInput.value = pageNotes.get(pageNumber) ?? '';
   if (focusKey)
     root
       .querySelector<HTMLElement>(`[data-focus="${CSS.escape(focusKey)}"]`)
       ?.focus({ preventScroll: true });
   const modal = root.querySelector<HTMLElement>('.preview-modal');
-  for (const element of root.querySelectorAll<HTMLElement>('header, main, footer, #pdf-input'))
+  for (const element of root.querySelectorAll<HTMLElement>(
+    'header, main, footer:not(.progress-confirm-actions), #pdf-input, #project-input',
+  ))
     element.inert = !!modal;
   document.body.style.overflow = modal ? 'hidden' : '';
   if (modal && !modal.contains(document.activeElement))
@@ -157,6 +234,7 @@ function workspaceView() {
   const locked = busy ? 'disabled' : '';
   return `<section class="workspace-heading"><div><p class="eyebrow"><span class="status-dot"></span>${t.done}</p><h1>${t.review}</h1><p>${t.reviewSub}</p></div><div class="file-chip">${icon('file')}<span title="${escape(filename)}">${escape(filename)}</span>${action('choose', t.newFile, 'text-btn', locked)}</div></section>
     <div class="stats-row"><div class="stats"><span><b>${pages.length}</b>${t.original}</span><span class="stats-arrow">→</span><span class="positive"><b>${kept.size}</b>${t.kept}</span><span><b>${pages.length - kept.size}</b>${t.excluded}</span></div><div class="toolbar">${action('undo', t.undo, 'btn subtle', `${locked} ${history.length ? '' : 'disabled'}`)}${action('keep-all', t.all, 'btn subtle', locked)}${action('reset', t.reset, 'btn subtle', locked)}</div></div>
+    ${projectToolbar({ lang, disabled: !!busy, dirty: projectDirty, noteCount: pageNotes.size })}
     <div class="workspace"><aside class="group-sidebar"><div class="sidebar-title">${t.groups}<span>${a.groups.length}</span></div><nav aria-label="${t.groups}">${a.groups.map((item, i) => `<button class="group-item ${i === groupIndex ? 'active' : ''}" data-action="group" data-index="${i}" data-focus="group-${i}" aria-current="${i === groupIndex ? 'true' : 'false'}"><span class="group-number">${String(i + 1).padStart(2, '0')}</span><span><strong>${t.pages} ${pageRange(item.pages)}</strong><small>${kindName(item)}</small></span><span class="group-count">${item.pages.filter((p) => kept.has(p)).length}/${item.pages.length}</span></button>`).join('')}</nav><button class="clear-file text-btn" data-action="clear" ${locked}>${icon('close')}${t.clear}</button></aside>
     <section class="review-panel"><div class="group-heading"><div><p class="eyebrow">${t.group} ${String(groupIndex + 1).padStart(2, '0')}</p><h2>${kindName(g)}</h2></div><span class="kind-badge ${g.kind}">${t.pages} ${pageRange(g.pages)}</span></div><p class="group-explanation">${groupHelp(g)}</p>
     ${studyGuidance(g, lang, !!busy)}
@@ -170,6 +248,7 @@ function workspaceView() {
     ${sequenceControls(g, pageNumber, kept, lang, sequencePlayer.playing, !!busy)}
     ${pagePreview(active, g)}${diff && g.pages.indexOf(pageNumber) > 0 ? `<p class="diff-hint">${t.diffHint}</p>` : ''}
     <p class="study-limit">${studyMessages(lang).limitation}</p>
+    ${noteEditor({ pageNumber, note: pageNotes.get(pageNumber) ?? '', kept: kept.has(pageNumber), lang, disabled: !!busy })}
     <div class="page-navigation">${action('previous', icon('chevron'), 'icon-btn previous', `aria-label="${t.previous}" ${pageNumber === 1 ? 'disabled' : ''}`)}<span>${t.originalPage} ${pageNumber} ${t.of} ${pages.length}</span>${action('next', icon('chevron'), 'icon-btn', `aria-label="${t.next}" ${pageNumber === pages.length ? 'disabled' : ''}`)}</div></section>
     ${exportSidebarView()}</div>
     <details class="method"><summary>${t.method}</summary><p>${t.methodBody}</p></details>`;
@@ -437,6 +516,7 @@ function navigatePreview(number: number) {
     return;
   }
   if (expanded && analysis) {
+    if (pageNumber !== number) projectDirty = true;
     pageNumber = number;
     groupIndex = analysis.groups.findIndex((g) => g.pages.includes(number));
     diff = false;
@@ -478,10 +558,15 @@ async function beginLoad(producer: () => Promise<Uint8Array>, name: string) {
     );
     if (id !== loadId || signal.aborted) return;
     const result = analyzePages(snapshots);
+    const hash = await fingerprintPdf(bytes);
+    if (id !== loadId || signal.aborted) return;
     pages = snapshots;
     analysis = result;
     source = bytes;
     filename = name;
+    sourceFingerprint = hash;
+    pageNotes = new Map();
+    projectDirty = false;
     kept = new Set(result.suggestedKeep);
     markdownImages = result.groups.some(
       (group) => group.studyKind === 'derivation' || group.studyKind === 'diagram',
@@ -500,7 +585,7 @@ async function beginLoad(producer: () => Promise<Uint8Array>, name: string) {
 }
 
 function acceptFile(file?: File) {
-  if (!file || busy === 'export' || busy === 'preview') return;
+  if (!file || busy || pendingReplacement || expanded || previewOpen) return;
   const t = messages(lang);
   if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') {
     error = t.noFile;
@@ -512,7 +597,9 @@ function acceptFile(file?: File) {
     render();
     return;
   }
-  void beginLoad(async () => new Uint8Array(await file.arrayBuffer()), file.name);
+  replaceProgress('file', () => {
+    void beginLoad(async () => new Uint8Array(await file.arrayBuffer()), file.name);
+  });
 }
 
 function download(bytes: Uint8Array | string, name: string, type: string) {
@@ -528,6 +615,136 @@ function download(bytes: Uint8Array | string, name: string, type: string) {
   document.body.append(a);
   a.click();
   a.remove();
+}
+
+function replacementModal() {
+  const t = reviewMessages(lang);
+  const prefix =
+    pendingReplacement!.kind === 'restore'
+      ? 'restoreConfirm'
+      : pendingReplacement!.kind === 'clear'
+        ? 'unsavedClear'
+        : 'unsavedReplace';
+  return `<div class="modal-backdrop"><section class="preview-modal progress-confirm" role="dialog" aria-modal="true" aria-labelledby="replacement-title" aria-describedby="replacement-message"><h2 id="replacement-title">${t[`${prefix}Title`]}</h2><p id="replacement-message">${t[`${prefix}Message`]}</p><div class="progress-confirm-actions">${action('replacement-cancel', t.cancel)}${action('replacement-confirm', t[`${prefix}Action`], 'btn primary')}</div></section></div>`;
+}
+
+function replaceProgress(kind: 'restore' | 'file' | 'clear', apply: () => void) {
+  if (!projectDirty) {
+    apply();
+    return;
+  }
+  pauseForNote();
+  pendingReplacement = {
+    kind,
+    apply,
+    returnFocus: (document.activeElement as HTMLElement)?.dataset.focus,
+  };
+  render();
+}
+
+function saveProject() {
+  if (!source || busy) return;
+  const project: ReviewProject = {
+    schema: 'slideprune.review',
+    version: 1,
+    document: {
+      sha256: sourceFingerprint,
+      byteLength: source.length,
+      pageCount: pages.length,
+      name: filename,
+    },
+    review: {
+      keptPages: selectedPages(),
+      currentPage: pageNumber,
+      notes: [...pageNotes].map(([pageNumber, text]) => ({ pageNumber, text })),
+    },
+    settings: { layout, format: outputFormat, wordImages, markdownImages },
+  };
+  error = '';
+  try {
+    download(
+      encodeReviewProject(project),
+      `${filename.replace(/\.pdf$/i, '')}.slideprune.json`,
+      'application/json',
+    );
+    projectDirty = false;
+    notice = reviewMessages(lang).saveSuccess;
+  } catch (err) {
+    error = err instanceof Error ? err.message : reviewMessages(lang).saveError;
+  }
+  render();
+}
+
+async function restoreProject(file?: File) {
+  if (!file || !source || busy || pendingReplacement) return;
+  const id = loadId;
+  const identity = {
+    sha256: sourceFingerprint,
+    byteLength: source.length,
+    pageCount: pages.length,
+  };
+  pauseForNote();
+  busy = 'project';
+  error = '';
+  notice = reviewMessages(lang).restorePending;
+  render();
+  let project: ReviewProject;
+  try {
+    if (file.size > MAX_PROJECT_BYTES) throw new Error('Review project file exceeds 2 MiB.');
+    project = decodeReviewProject(await file.text(), identity);
+  } catch (err) {
+    if (id === loadId) {
+      busy = null;
+      notice = '';
+      error = err instanceof Error ? err.message : reviewMessages(lang).restoreError;
+      render();
+    }
+    return;
+  }
+  if (id !== loadId) return;
+  busy = null;
+  notice = '';
+  replaceProgress('restore', () => {
+    cancelPreviewRender();
+    exportCache.clear();
+    if (downloadLink) URL.revokeObjectURL(downloadLink.url);
+    downloadLink = null;
+    kept = new Set(project.review.keptPages);
+    pageNotes = new Map(project.review.notes.map(({ pageNumber, text }) => [pageNumber, text]));
+    pageNumber = project.review.currentPage;
+    groupIndex = analysis!.groups.findIndex((group) => group.pages.includes(pageNumber));
+    layout = project.settings.layout;
+    outputFormat = project.settings.format;
+    wordImages = project.settings.wordImages;
+    markdownImages = project.settings.markdownImages;
+    history = [];
+    diff = comparing = expanded = previewOpen = false;
+    sourcePreview = outputPreview = '';
+    projectDirty = false;
+    notice = reviewMessages(lang).restoreSuccess;
+    render();
+  });
+}
+
+function clearDocument() {
+  cancelDocumentExport();
+  cancelPreviewRender();
+  ++loadId;
+  if (downloadLink) URL.revokeObjectURL(downloadLink.url);
+  downloadLink = null;
+  pages = [];
+  analysis = null;
+  source = null;
+  filename = sourceFingerprint = '';
+  pageNotes.clear();
+  projectDirty = false;
+  kept.clear();
+  history = [];
+  error = notice = '';
+  exportCache.clear();
+  sourcePreview = outputPreview = '';
+  expanded = previewOpen = false;
+  render();
 }
 
 async function savePdf() {
@@ -569,6 +786,7 @@ async function saveDocument() {
   const sourceId = loadId;
   const snapshots = pages;
   const selection = selectedPages();
+  const notes = new Map(pageNotes);
   const options = {
     title: filename.replace(/\.pdf$/i, ''),
     language: lang,
@@ -607,6 +825,7 @@ async function saveDocument() {
       signal,
     );
     if (!current()) return;
+    for (const page of prepared) page.note = notes.get(page.pageNumber);
     documentProgress.phase = 'writing';
     updateDocumentProgress();
     const exporter = await import('./document-export');
@@ -645,6 +864,7 @@ function setPage(n: number, playback = false) {
   if (!playback) sequencePlayer.stop();
   const nextGroup = analysis.groups.findIndex((g) => g.pages.includes(n));
   if (nextGroup !== groupIndex) diff = false;
+  if (pageNumber !== n) projectDirty = true;
   pageNumber = n;
   groupIndex = nextGroup;
   render();
@@ -654,13 +874,38 @@ root.addEventListener('click', (event) => {
   const target = (event.target as Element).closest<HTMLElement>('[data-action]');
   if (!target || target.hasAttribute('disabled')) return;
   const command = target.dataset.action;
+  if (pendingReplacement) {
+    if (command === 'replacement-confirm' || command === 'replacement-cancel') {
+      const pending = pendingReplacement;
+      pendingReplacement = null;
+      if (command === 'replacement-confirm') pending.apply();
+      else {
+        render();
+        if (pending.returnFocus)
+          root
+            .querySelector<HTMLElement>(`[data-focus="${CSS.escape(pending.returnFocus)}"]`)
+            ?.focus();
+      }
+    }
+    return;
+  }
+  if (busy === 'project') return;
   if (command !== 'sequence-play') sequencePlayer.stop();
+  if (command === 'save-project') {
+    saveProject();
+    return;
+  }
+  if (command === 'restore-project') {
+    if (!busy) root.querySelector<HTMLInputElement>('#project-input')!.click();
+    return;
+  }
   if (command === 'home') {
     event.preventDefault();
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
   if (command === 'choose') {
+    if (busy) return;
     root.querySelector<HTMLInputElement>('#pdf-input')!.click();
     return;
   }
@@ -708,7 +953,9 @@ root.addEventListener('click', (event) => {
         analysis.groups[groupIndex].pages,
         pageNumber,
         (n) => setPage(n, true),
-        () => render(),
+        () => {
+          if (!preserveEditor) render();
+        },
       );
     render();
     return;
@@ -783,7 +1030,9 @@ root.addEventListener('click', (event) => {
     return;
   }
   if (command === 'group' && analysis) {
+    const previousPage = pageNumber;
     activateGroup(Number(target.dataset.index));
+    if (pageNumber !== previousPage) projectDirty = true;
     render();
     return;
   }
@@ -813,34 +1062,28 @@ root.addEventListener('click', (event) => {
   }
   if (command === 'keep-all') setSelection(pages.map((p) => p.pageNumber));
   if (command === 'reset' && analysis) setSelection(analysis.suggestedKeep);
-  if (command === 'layout') layout = target.dataset.layout as ExportLayout;
-  if (command === 'format') outputFormat = target.dataset.format as OutputFormat;
+  if (command === 'layout' && layout !== target.dataset.layout) {
+    layout = target.dataset.layout as ExportLayout;
+    projectDirty = true;
+  }
+  if (command === 'format' && outputFormat !== target.dataset.format) {
+    outputFormat = target.dataset.format as OutputFormat;
+    projectDirty = true;
+  }
   if (command === 'document-images') {
+    projectDirty = true;
     if (outputFormat === 'docx') wordImages = !wordImages;
     else if (outputFormat === 'markdown') markdownImages = !markdownImages;
   }
   if (command === 'clear') {
-    cancelDocumentExport();
-    cancelPreviewRender();
-    ++loadId;
-    if (downloadLink) URL.revokeObjectURL(downloadLink.url);
-    downloadLink = null;
-    pages = [];
-    analysis = null;
-    source = null;
-    filename = '';
-    kept.clear();
-    history = [];
-    error = '';
-    exportCache.clear();
-    outputPreview = '';
-    previewOpen = false;
+    replaceProgress('clear', clearDocument);
+    return;
   }
   if (command === 'report' && analysis) {
     const selection = selectedPages();
     const report = {
       application: 'SlidePrune',
-      version: '0.3.1',
+      version: '0.4.0',
       sourceFile: filename,
       originalPages: pages.length,
       format: outputFormat,
@@ -874,10 +1117,23 @@ root.addEventListener('click', (event) => {
 root.addEventListener('change', (event) => {
   if ((event.target as HTMLElement).id === 'pdf-input')
     acceptFile((event.target as HTMLInputElement).files?.[0]);
+  if ((event.target as HTMLElement).id === 'project-input')
+    void restoreProject((event.target as HTMLInputElement).files?.[0]);
+  if ((event.target as HTMLElement).matches('#pdf-input, #project-input'))
+    (event.target as HTMLInputElement).value = '';
 });
 root.addEventListener('input', (event) => {
+  if ((event.target as HTMLElement).id === 'page-note' && !(event as InputEvent).isComposing)
+    updateNote(event.target as HTMLTextAreaElement);
   if ((event.target as HTMLElement).id === 'preview-page')
     previewPageDraft = (event.target as HTMLInputElement).value;
+});
+root.addEventListener('compositionend', (event) => {
+  if ((event.target as HTMLElement).id === 'page-note')
+    updateNote(event.target as HTMLTextAreaElement);
+});
+root.addEventListener('focusin', (event) => {
+  if ((event.target as HTMLElement).id === 'page-note') pauseForNote();
 });
 root.addEventListener('dragover', (event) => {
   event.preventDefault();
@@ -892,6 +1148,11 @@ root.addEventListener('drop', (event) => {
   acceptFile(event.dataTransfer?.files[0]);
 });
 document.addEventListener('keydown', (event) => {
+  if (pendingReplacement && event.key === 'Escape') {
+    root.querySelector<HTMLButtonElement>('[data-action="replacement-cancel"]')?.click();
+    event.preventDefault();
+    return;
+  }
   if (event.key === 'Escape' && sequencePlayer.playing) sequencePlayer.stop();
   if ((event.target as HTMLElement).id === 'preview-page' && event.key === 'Enter') {
     event.preventDefault();
@@ -903,7 +1164,7 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
     return;
   }
-  if ((expanded || previewOpen) && event.key === 'Tab') {
+  if ((expanded || previewOpen || pendingReplacement) && event.key === 'Tab') {
     const buttons = Array.from(
       root.querySelectorAll<HTMLElement>(
         '.preview-modal button:not(:disabled), .preview-modal input, .preview-modal a[href]',
@@ -936,6 +1197,7 @@ document.addEventListener('keydown', (event) => {
   }
   if (
     busy ||
+    pendingReplacement ||
     !pages.length ||
     expanded ||
     previewOpen ||
@@ -953,6 +1215,11 @@ document.addEventListener('keydown', (event) => {
   }
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) sequencePlayer.stop();
+  if (document.hidden) pauseForNote();
+});
+window.addEventListener('beforeunload', (event) => {
+  if (!projectDirty) return;
+  event.preventDefault();
+  event.returnValue = '';
 });
 render();

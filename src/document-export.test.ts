@@ -65,6 +65,48 @@ describe('editable Word document export', () => {
     expect(xml).not.toContain('\u0001');
     expect(xml).not.toContain('w:keepLines');
   });
+
+  it('places localized editable notes after each page text without mutating the source', async () => {
+    const input: DocumentPage[] = [
+      { pageNumber: 7, textLines: ['Page seven text'], note: 'Seven notes' },
+      {
+        pageNumber: 2,
+        textLines: ['Page two text'],
+        note: '  <x> & 🧪\r\n\r\n# line\t\u0001\ud800',
+      },
+    ];
+    const before = structuredClone(input);
+    const files = unzipSync(await exportDocx(input, options));
+    const xml = strFromU8(files['word/document.xml']);
+    const paragraphs = [...xml.matchAll(/<w:p>(.*?)<\/w:p>/gs)].map((match) => match[1]);
+    const notesIndex = paragraphs.findIndex((paragraph) => paragraph.includes('我的笔记'));
+    expect(paragraphs[notesIndex - 1]).toContain('Page two text');
+    expect(paragraphs[notesIndex]).toContain('w:pStyle w:val="Heading2"');
+    expect(paragraphs[notesIndex + 1]).toContain('xml:space="preserve">  &lt;x&gt; &amp; 🧪</w:t>');
+    expect(paragraphs[notesIndex + 2]).toContain('<w:t xml:space="preserve"></w:t>');
+    expect(paragraphs[notesIndex + 3]).toContain('# line\t��');
+    expect(xml.indexOf('# line')).toBeLessThan(xml.indexOf('原始页 7'));
+    expect(xml.indexOf('Page seven text')).toBeLessThan(xml.indexOf('Seven notes'));
+    expect(xml.match(/我的笔记/g)).toHaveLength(2);
+    expect(xml).not.toContain('\u0001');
+    expect(input).toEqual(before);
+  });
+
+  it('includes notes with image references but omits blank or absent notes sections', async () => {
+    const input: DocumentPage[] = [
+      { pageNumber: 1, textLines: [], note: 'My observation' },
+      { pageNumber: 2, textLines: [], note: ' \r\n\t' },
+      { pageNumber: 3, textLines: [] },
+    ].map((page) => ({ ...page, image: { bytes: png, width: 1, height: 1 } }));
+    const files = unzipSync(
+      await exportDocx(input, { ...options, language: 'en', includeImages: true }),
+    );
+    const xml = strFromU8(files['word/document.xml']);
+    expect(xml.match(/My notes/g)).toHaveLength(1);
+    expect(xml).toContain('My observation');
+    expect(xml.match(/<w:drawing>/g)).toHaveLength(3);
+    expect(xml.indexOf('No extractable text')).toBeLessThan(xml.indexOf('My observation'));
+  });
 });
 
 describe('literal Markdown and portable image bundle', () => {
@@ -129,6 +171,50 @@ describe('literal Markdown and portable image bundle', () => {
     expect(strFromU8(docx['word/document.xml'])).toContain('No OCR was performed.');
   });
 
+  it('preserves note lines as literal content under localized headings in Markdown', () => {
+    const input = [
+      {
+        pageNumber: 4,
+        textLines: ['Source text'],
+        note: '  <script>alert("x")</script>\r\n\r\n[open](javascript:alert(1))\n# Literal heading',
+      },
+    ];
+    const before = structuredClone(input);
+    const markdown = exportMarkdown(input, { ...options, language: 'en' });
+    expect(markdown).toContain('Source text\n\n### My notes\n\n');
+    expect(markdown).toContain('&#32;&#32;&lt;script&gt;');
+    expect(markdown).toContain(
+      'script&gt;  \n  \n\\[open\\]\\(javascript\\:alert\\(1\\)\\)  \n\\# Literal heading',
+    );
+    expect(markdown).not.toContain('<script>');
+    expect(markdown).not.toContain('[open](javascript:');
+    expect(input).toEqual(before);
+    expect(exportMarkdown([{ ...input[0], note: ' \r\n\t' }], options)).not.toContain(
+      '### 我的笔记',
+    );
+  });
+
+  it.each([false, true])(
+    'keeps each selected page note in the bundle with includeImages=%s',
+    async (includeImages) => {
+      const input = pages.map((page) => ({
+        ...page,
+        note: `Note for page ${page.pageNumber}`,
+        image: { bytes: png, width: 1, height: 1 },
+      }));
+      const before = structuredClone(input);
+      const files = unzipSync(await exportMarkdownBundle(input, { ...options, includeImages }));
+      const markdown = strFromU8(files['index.md']);
+      expect(markdown.match(/### 我的笔记/g)).toHaveLength(2);
+      expect(markdown.indexOf('Note for page 2')).toBeLessThan(markdown.indexOf('## 原始页 7'));
+      expect(markdown.indexOf('## 原始页 7')).toBeLessThan(markdown.indexOf('Note for page 7'));
+      expect(Object.keys(files).filter((name) => name.startsWith('images/'))).toHaveLength(
+        includeImages ? 2 : 0,
+      );
+      expect(input).toEqual(before);
+    },
+  );
+
   it.each([[], [0], [-1], [1.5], [1, 1]].map((numbers) => ({ numbers })))(
     'rejects invalid source pages $numbers',
     async ({ numbers }) => {
@@ -141,5 +227,42 @@ describe('literal Markdown and portable image bundle', () => {
   it('rejects an image request when the page lacks a valid PNG', async () => {
     expect(() => exportMarkdown(pages, { ...options, includeImages: true })).toThrow('PNG');
     await expect(exportDocx(pages, { ...options, includeImages: true })).rejects.toThrow('PNG');
+  });
+});
+
+describe('bounded authored note export', () => {
+  it.each([null, 5, {}, [], true, 'x'.repeat(4001)].map((note) => ({ note })))(
+    'rejects a note of unsupported type or length: %#',
+    async ({ note }) => {
+      const input = [{ pageNumber: 1, textLines: [], note }] as unknown as DocumentPage[];
+      expect(() => exportMarkdown(input, options)).toThrow('Page notes must be plain text');
+      await expect(exportDocx(input, options)).rejects.toThrow('Page notes must be plain text');
+      await expect(exportMarkdownBundle(input, options)).rejects.toThrow(
+        'Page notes must be plain text',
+      );
+    },
+  );
+
+  it('accepts 4000 characters per page and 200000 in total, then rejects one more', async () => {
+    const input = Array.from({ length: 50 }, (_, index) => ({
+      pageNumber: index + 1,
+      textLines: [],
+      note: 'x'.repeat(4000),
+    }));
+    const before = structuredClone(input);
+    expect(exportMarkdown(input, options).match(/### 我的笔记/g)).toHaveLength(50);
+    const files = unzipSync(await exportDocx(input, options));
+    expect(strFromU8(files['word/document.xml']).match(/我的笔记/g)).toHaveLength(50);
+    const bundle = unzipSync(await exportMarkdownBundle(input, options));
+    expect(strFromU8(bundle['index.md']).match(/### 我的笔记/g)).toHaveLength(50);
+    expect(input).toEqual(before);
+    const oversized = [...input, { pageNumber: 51, textLines: [], note: 'x' }];
+    expect(() => exportMarkdown(oversized, options)).toThrow('Total notes must not exceed 200000');
+    await expect(exportDocx(oversized, options)).rejects.toThrow(
+      'Total notes must not exceed 200000',
+    );
+    await expect(exportMarkdownBundle(oversized, options)).rejects.toThrow(
+      'Total notes must not exceed 200000',
+    );
   });
 });

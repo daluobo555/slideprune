@@ -10,7 +10,7 @@ A lecture PDF can contain a new page for every bullet, equation or animation ste
 
 Export your reviewed selection as PDF, Word (`.docx`), or Markdown. Input remains PDF only.
 
-**Status: local prototype, v0.3.1.** The name is provisional. No public deployment is provided in this checkout.
+**Status: local preview, v0.4.0.** Page notes and save/restore progress are local, unpublished additions. No public demo deployment is provided in this checkout.
 
 ![SlidePrune 0.3.0: progressive reveals, formula derivations and changing diagrams](docs/assets/study-workflows.png)
 
@@ -64,8 +64,9 @@ npm run preview
 1. Import a PDF or open a progressive-reveal, formula or diagram example.
 2. Inspect the proposed groups and thumbnails. Play the source sequence or jump to a step. Compare a page with the preceding page in its group side by side, or highlight their visual differences. Open the enlarged source preview to inspect fine details and keep or exclude the page there.
 3. Keep or exclude any page. Preserve a whole group with **Keep every step**, or use **Keep all** for the whole document. Group suggestions can be restored separately. **Undo** or **Ctrl/Cmd+Z** reverses selection changes.
-4. Choose **PDF**, **Word**, or **Markdown**. For PDF, select a layout and use **Preview handout** to inspect any output sheet. For Word or Markdown, choose whether to include original page images.
-5. Download the chosen format and check the saved file. You can also download a JSON decision report.
+4. Add your own plain-text notes under **My notes** for any source page. Use **Save progress** to download your selection, notes and settings before leaving.
+5. Choose **PDF**, **Word**, or **Markdown**. For PDF, select a layout and use **Preview handout** to inspect any output sheet. For Word or Markdown, choose whether to include original page images.
+6. Download the chosen format and check the saved file. The separate JSON page map records decisions; use the progress file to restore work.
 
 | PDF layout | Output |
 | --- | --- |
@@ -76,6 +77,18 @@ npm run preview
 **Word** exports editable extracted text in a `.docx`, with original-page PNG references included by default. **Markdown** can export a plain `.md` or a ZIP containing `index.md` and an `images/` folder. A newly loaded document with formula or diagram cues defaults to Markdown images enabled. Turning images off displays a reminder that essential visual details may be missing. Keep the image folder beside `index.md` when opening or importing it.
 
 All PDF layouts, Word and Markdown use the same reviewed page selection in original order. Playing a sequence or changing its study view does not silently add or remove export pages.
+
+### Notes and saved progress
+
+![Page notes and local review progress](docs/assets/review-notes.png)
+
+Write notes while reviewing a source page. **Word and Markdown include notes only for kept pages**, after that page's extracted text under **My notes**. Plain text and line breaks are retained; typed notes are **not included in PDF exports**. Notes on excluded pages remain in your progress file and reappear in Word/Markdown if you keep those pages again.
+
+**Save progress** explicitly downloads a local JSON file containing the source PDF identity, selected pages, current page, all page notes and export settings. It contains **no PDF bytes or page images**. There is **no autosave**: refreshing or closing the tab loses changes that you have not saved. Check that the browser actually saved the downloaded file.
+
+To resume, open the **exact original PDF**, then choose **Restore progress** and select your saved JSON. The app checks SHA-256, byte length and page count before restoring, and asks before replacing unexported changes. A renamed but byte-identical PDF works; a modified or re-exported PDF does not. Keep the original PDF alongside your progress file. Restore requires HTTPS or localhost for the browser's fingerprint check.
+
+Notes are limited to **4,000 UTF-16 code units per page** and **200,000 in total**; some emoji count as two units. Progress files are limited to **2 MiB**. These files contain your written notes, so share them only when you intend to share that content.
 
 Word and Markdown organize the selected pages into sections labeled with their original page numbers. They do not recreate the slide layout or perform OCR. Check the extracted reading order and formulas; a reference image does not turn a formula into an editable equation. Pages without extractable text need images to retain their visible content. Attached PNGs preserve the page proportions within **1280 × 1800 pixels**, with an **80 MiB total image-data limit** per export. If exceeded, select fewer pages or turn off page images.
 
@@ -115,6 +128,7 @@ Maintainers can prepare a static browser demo with the [manual deployment workfl
 | `src/analyze.ts` | Pure page comparison and conservative selection suggestions |
 | `src/export.ts` | Original-page and vector PDF handout exports with pdf-lib |
 | `src/document-export.ts` | Editable-text Word documents and Markdown files or image ZIPs |
+| `src/review-project.ts`, `src/review-ui.ts`, `src/review.css` | Bounded local progress files, PDF identity checks and page-note controls |
 | `src/demo.ts` | Synthetic lecture with duplicates, builds, and content changes |
 | `src/study-demo.ts` | Original formula and diagram lessons, plus the existing reveal example |
 | `src/study-ui.ts`, `src/study.css` | Scenario examples, study guidance and sequence controls |

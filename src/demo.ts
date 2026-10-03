@@ -6,6 +6,9 @@ export async function createDemoPdf(): Promise<Uint8Array> {
   doc.setTitle('How to learn with less noise - SlidePrune demo');
   doc.setAuthor('SlidePrune');
   doc.setSubject('Original synthetic slides for testing; no third-party course material.');
+  // Fixed synthetic dates keep the same demo byte-identical for saved review projects.
+  doc.setCreationDate(new Date('2026-01-01T00:00:00Z'));
+  doc.setModificationDate(new Date('2026-01-01T00:00:00Z'));
   const regular = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const mono = await doc.embedFont(StandardFonts.Courier);

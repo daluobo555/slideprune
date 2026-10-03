@@ -161,6 +161,23 @@ The local Windows 0.3.1 package is `output/release/local-byLKxz/SlidePrune-0.3.1
 
 The final executable was also exercised in the in-app browser. The abnTeX2 document showed 13 original / 11 retained / 2 excluded and a pages 4–6 reveal group. The IIT document showed 82/82 and the six retained stages 58–63; automatic playback reached step 6/6, stopped, and left 82 retained pages unchanged. Browser error logs were empty at the final check. This confirms these local UI interactions, not browser download persistence.
 
+## Local page notes and review progress (0.4.0)
+
+The local preview adds notes keyed by original PDF page, selected-page notes in Word/Markdown, and explicit JSON save/restore. A progress file contains the PDF SHA-256, byte length and page count, selections, notes, current page and export settings; it does not contain PDF bytes or images. All three built-in examples now use fixed synthetic metadata so reopening an example produces identical bytes.
+
+All **225 application tests**, TypeScript, production build and **5 packaging helper tests** pass locally. Coverage includes strict progress schema validation, unsupported versions, oversized/invalid input, mismatched PDFs, note limits, escaped Markdown/XML, selected-page exports, and byte-identical demos across different clocks. A separate temporary fixture check generated actual Word/Markdown files and verified their content, including exclusion of notes on omitted pages.
+
+The production build was exercised in the in-app browser:
+
+- Notes survived page navigation and language switching; focusing the note editor stopped playback without moving focus. Arrow keys stayed in the editor, and an initial blank line survived rerendering.
+- A six-page formula project restored pages **1, 3, 4, 6**, current page **4**, grid layout, Markdown format, both image flags off, and three notes including one on excluded page 2.
+- Malformed JSON and a different PDF fingerprint were rejected without altering the current note. Cancelling restore or clearing kept the current work. Confirming a replacement with a corrupt PDF also retained the previous PDF and notes.
+- A 51-page fixture with exactly **200,000 UTF-16 code units** rejected an overflowing insertion into `ABCDE` without dropping its final character. Reducing the note remained possible.
+- A 390 px responsive view showed the note editor and export controls without horizontal page overflow. The temporary viewport override was reset.
+- Progress, Word and Markdown actions produced the expected save links. As described below, browser download persistence remains unconfirmed; module-generated artifacts and their contents were checked separately. Native Chinese IME composition and browser before-unload prompts were not manually exercised.
+
+See the [current notes interface](assets/review-notes.png). Disposable fixtures and machine-readable checks are in ignored `output/review-notes-qa/`. This version has not been uploaded or deployed.
+
 ## Remaining verification limit
 
 ### Prepared repository checks
