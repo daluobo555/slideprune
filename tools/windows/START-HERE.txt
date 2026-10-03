@@ -1,0 +1,40 @@
+SlidePrune — Windows 本地试用包 / Local Windows trial
+
+简体中文
+1. 解压整个 ZIP 到你自己的文件夹。
+2. 双击 SlidePrune.exe。浏览器会打开本地页面。
+   如果没有自动打开，请复制启动窗口里的 http://127.0.0.1:... 地址到浏览器。
+3. 点击“试试示例课件”，或选择自己的 PDF。复核页面后选择 PDF、Word 或 Markdown。
+4. 使用期间保持启动窗口打开。在窗口中按 Enter 或关闭该窗口即可退出。
+
+不需要安装 Node、npm，也不需要账号或 API Key。运行时不需要联网。
+你的 PDF 在当前浏览器里处理，不会发给启动程序或其他服务。
+关闭浏览器标签页不会自动退出启动程序。已经下载的文件会保留。
+Word 导出可编辑的提取文字及可选原页图片；Markdown 可选附图 ZIP。
+文字顺序与公式需校对；本版不含 OCR。PDF 输出保留现有三种排版。
+应用会发起下载，请自行检查浏览器下载列表及保存的文件。
+
+此包是未签名的本地试用版。系统信誉提示和默认浏览器自动打开需要在
+目标 Windows 环境中另行验证。不要为运行此包关闭系统安全保护。
+
+English
+1. Extract the complete ZIP into a folder you own.
+2. Double-click SlidePrune.exe. Your browser opens a local page.
+   If it does not open, copy the http://127.0.0.1:... address from the startup window.
+3. Try the sample lecture or choose a PDF, review pages, then choose PDF, Word or Markdown.
+4. Keep the startup window open while using the app. Press Enter in that window,
+   or close it, to stop the app. Closing a browser tab does not stop the launcher.
+
+No Node, npm, account or API key is required. The package can run offline.
+Your PDFs stay in browser memory; the launcher serves only the built-in app files.
+Word contains editable extracted text and optional page images; Markdown can include an image ZIP.
+Check reading order and formulas; no OCR is performed. PDF retains its three layouts.
+Downloaded files remain on your device. Check your browser's downloads and saved files.
+
+This is an unsigned local trial. Windows reputation prompts and opening the default
+browser require separate checks on the target machine. Keep system protections enabled.
+
+Windows with .NET Framework 4.x and a current browser is required.
+Verified build/test environment: Windows, .NET Framework 4.8.1.
+Third-party components retain their own licenses; see THIRD-PARTY-NOTICES.txt,
+THIRD-PARTY-SOURCES.md, and the accompanying source archive.

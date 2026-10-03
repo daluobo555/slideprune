@@ -1,0 +1,49 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ['22.13.0', '24']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:package
+      - run: npm run build
+      - name: Build and verify the portable Windows executable
+        if: runner.os == 'Windows' && matrix.node == '24'
+        shell: pwsh
+        run: |
+          @'
+          import { buildWindowsPackage } from './scripts/package-windows.mjs';
+          import { spawnSync } from 'node:child_process';
+          import path from 'node:path';
+          const result = await buildWindowsPackage();
+          const checked = spawnSync(process.execPath, [
+            'tools/windows/launcher.test.mjs', result.executable,
+            path.resolve(result.folder, '../assets'),
+          ], { stdio: 'inherit', windowsHide: true });
+          if (checked.error) throw checked.error;
+          process.exitCode = checked.status ?? 1;
+          '@ | node --input-type=module
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
